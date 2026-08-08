@@ -152,18 +152,25 @@ set on the command line still wins, which is handy for one-offs:
 PLATFORM=linux/arm64 npm run deploy
 ```
 
-Then on the target host, set `IMAGE` in `.env` to the same value and:
+`compose.yaml` points at GHCR, so to run your own published image on the target
+host, override it with a small file next to it:
+
+```yaml
+# compose.override.yaml — picked up automatically, and gitignored
+services:
+  hydrawise-proxy:
+    image: registry.example.com/hydrawise-proxy:latest
+```
 
 ```bash
 docker compose pull && docker compose up -d
 ```
 
-All three are read from `.env`, or from the environment:
+Both are read from `.env`, or from the environment:
 
 | Variable | Default | Used by |
 | --- | --- | --- |
-| `IMAGE` | `hydrawise-proxy` | Both — repository path, no tag |
-| `TAG` | `latest` | Compose — which tag to run |
+| `IMAGE` | `hydrawise-proxy` | `npm run deploy` — repository path, no tag |
 | `PLATFORM` | `linux/amd64` | `npm run deploy` |
 
 `PLATFORM` defaults to `linux/amd64` because the common case is building on an

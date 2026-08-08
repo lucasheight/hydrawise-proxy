@@ -1,13 +1,15 @@
 services:
   hydrawise-proxy:
-    image: ${IMAGE:-ghcr.io/lucasheight/hydrawise-proxy}:${TAG:-latest}
+    # Published multi-arch (amd64 + arm64), so `docker compose up -d` pulls a
+    # ready-made image and never needs a build. TAG pins a release — set
+    # TAG=1.0.0 in .env to stop tracking latest, or to roll back.
+    # To build from source instead:
+    #   docker compose -f compose.yaml -f compose.build.yaml up -d --build
+    image: ghcr.io/lucasheight/hydrawise-proxy:${TAG:-latest}
+    pull_policy: always
+
     container_name: hydrawise-proxy
     restart: unless-stopped
-
-    # Published multi-arch (amd64 + arm64), so `docker compose up -d` pulls a
-    # ready-made image and never needs a build. To build from source instead:
-    #   docker compose -f compose.yaml -f compose.build.yaml up -d --build
-    pull_policy: always
 
     # BIND_ADDR controls who can reach this. 0.0.0.0 = anyone on the LAN, which
     # is what LAN clients need; the proxy has no request auth, so at 0.0.0.0

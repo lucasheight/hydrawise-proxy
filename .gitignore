@@ -1,4 +1,5 @@
 .env
+compose.override.yaml
 node_modules/
 npm-debug.log*
 .DS_Store
