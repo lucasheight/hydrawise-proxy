@@ -127,33 +127,11 @@ git push --follow-tags
 Pushes to `main` refresh `:latest`; tags additionally publish `:1.2.3` and
 `:1.2`. Nothing needs to be built or pushed from your laptop.
 
-### Publishing to your own registry
+### Running your own image instead
 
-Only needed if you want the image somewhere other than GHCR — a private
-registry, say.
-
-Set `IMAGE` in `.env` to your registry path, with no tag on the end:
-
-```bash
-IMAGE=registry.example.com/hydrawise-proxy
-```
-
-Then:
-
-```bash
-npm run deploy
-```
-
-That tags and pushes both `:<version>` and `:latest`. The deploy scripts read
-`.env` themselves, so the same file configures Compose and deploys. A variable
-set on the command line still wins, which is handy for one-offs:
-
-```bash
-PLATFORM=linux/arm64 npm run deploy
-```
-
-`compose.yaml` points at GHCR, so to run your own published image on the target
-host, override it with a small file next to it:
+If you would rather not pull from GHCR, build locally with the
+`compose.build.yaml` overlay shown above, or point Compose at your own registry
+with an override file next to `compose.yaml`:
 
 ```yaml
 # compose.override.yaml — picked up automatically, and gitignored
@@ -161,24 +139,6 @@ services:
   hydrawise-proxy:
     image: registry.example.com/hydrawise-proxy:latest
 ```
-
-```bash
-docker compose pull && docker compose up -d
-```
-
-Both are read from `.env`, or from the environment:
-
-| Variable | Default | Used by |
-| --- | --- | --- |
-| `IMAGE` | `hydrawise-proxy` | `npm run deploy` — repository path, no tag |
-| `PLATFORM` | `linux/amd64` | `npm run deploy` |
-
-`PLATFORM` defaults to `linux/amd64` because the common case is building on an
-Apple Silicon Mac for an x86_64 server. Deploying to a Raspberry Pi or other
-arm64 host? Use `PLATFORM=linux/arm64`.
-
-Bump `version` in `package.json` to cut a new tag; deploying twice on the same
-version overwrites the existing tag in the registry.
 
 ## iOS Shortcut
 
@@ -263,10 +223,11 @@ actually queued.
 
 ## Troubleshooting
 
-**`exec /usr/bin/node: exec format error`** — architecture mismatch. The image
-was built on Apple Silicon (arm64) for an x86_64 host. `npm run deploy` pins
-`linux/amd64`; rebuild and push, then `docker compose pull` on the server so it
-stops using the cached bad image.
+**`exec /usr/bin/node: exec format error`** — architecture mismatch: the image
+was built for a different CPU than the host, typically on an Apple Silicon Mac
+for an x86_64 server. The published image is multi-arch so this should not
+happen when pulling; if you built locally, run `docker compose pull` to replace
+it with the published one.
 
 **Can't reach it over the LAN** — check `docker port hydrawise-proxy` shows
 `0.0.0.0:8123` rather than `127.0.0.1:8123`, then check the host firewall.
