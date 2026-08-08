@@ -1,0 +1,7 @@
+.env
+node_modules/
+npm-debug.log*
+.DS_Store
+
+# Per-machine Claude Code permissions, not shared config
+.claude/settings.local.json

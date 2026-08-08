@@ -1,0 +1,46 @@
+services:
+  hydrawise-proxy:
+    build: .
+    image: registry.garit.au/hydrawise-proxy:latest
+    container_name: hydrawise-proxy
+    restart: unless-stopped
+
+    # BIND_ADDR controls who can reach this. 0.0.0.0 = anyone on the LAN, which
+    # is what LAN clients need; the proxy has no request auth, so at 0.0.0.0
+    # anyone who can route to this host can start the irrigation. Set
+    # BIND_ADDR=127.0.0.1 in .env to restrict it back to the host itself.
+    ports:
+      - "${BIND_ADDR:-0.0.0.0}:8123:8123"
+
+    environment:
+      # Sourced from .env alongside this file. Fails fast if unset.
+      API_KEY: ${API_KEY:?set API_KEY in .env}
+      RUN_SECONDS: ${RUN_SECONDS:-1800}
+      RUN_PERIOD_ID: ${RUN_PERIOD_ID:-999}
+
+    # Nothing is ever written to disk, so lock the filesystem down.
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+    # Liveness without burning Hydrawise API quota: an unknown path returns 404
+    # from the proxy itself and never touches upstream.
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "require('http').get('http://127.0.0.1:8123/healthz',r=>process.exit(0)).on('error',()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+    # It logs every request; keep that from filling the disk over months.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
