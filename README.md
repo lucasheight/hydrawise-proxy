@@ -3,11 +3,28 @@
 A small HTTP proxy in front of the Hydrawise v1 API, so an iOS Shortcut can
 start or stop a full irrigation cycle with one tap.
 
-The Hydrawise API needs the key in the query string, which makes it awkward to
-call directly from a phone. This wraps it: the key lives on the server, and the
-phone hits three plain endpoints on the LAN.
+The use case it was built for: it is unusually dry, you want to run an extra
+cycle on a weekend, and you would rather tap your phone than open an app and
+navigate to the right screen.
 
-Node stdlib only — no dependencies.
+The Hydrawise API wants the key in the query string, which makes it awkward to
+call from a phone — you would be pasting a credential into a shortcut. This
+wraps it instead: the key lives on a machine on your network, and the phone
+hits three plain endpoints on the LAN.
+
+Node standard library only — no dependencies, nothing to audit but one file.
+
+### You will need
+
+- A Hunter Hydrawise controller on your account, and an API key ([where to find
+  it](#getting-an-api-key))
+- Somewhere on your home network to run it — a Raspberry Pi, NAS, or any
+  always-on box with Docker
+- An iPhone, if you want the shortcut. The endpoints are ordinary HTTP, so
+  anything that can make a request works: Android, Home Assistant, `curl`, cron
+
+**Before you deploy this, read [Security](#security).** It has no authentication
+of its own by design, which is fine on a home LAN and not fine anywhere else.
 
 ## Endpoints
 
@@ -54,43 +71,60 @@ regenerated from the same screen, which immediately invalidates the old one —
 worth doing if it ever lands somewhere it should not, and the reason it is read
 from the environment rather than written into `server.js`.
 
-Hydrawise rate-limits the API fairly aggressively per key. The `/status`
-response includes a `nextpoll` field — 60 seconds on this account — which is the
+Hydrawise rate-limits the API per key. The `/status` response includes a
+`nextpoll` field — 60 seconds, in the payloads seen so far — which is the
 interval it expects you to respect. Nothing here polls on a timer, but do not
-add one that ignores it, and note this is why the container health check hits
-the proxy itself rather than calling `/status` every 30 seconds.
+add one that ignores it. It is also why the container health check pings the
+proxy itself rather than calling `/status` every 30 seconds.
 
 ## Running
 
-Locally:
+Quickest way to try it, no Docker:
 
 ```bash
 API_KEY='<your-key>' RUN_SECONDS=1800 npm start
+curl localhost:8123/status
 ```
 
-With Docker Compose — this is how it runs on the server:
+Note that this binds to `127.0.0.1` by default, so your phone cannot reach it
+yet. That is deliberate — see [Security](#security).
+
+For anything permanent, use Docker Compose:
 
 ```bash
-cp .env.example .env    # add your key
+cp .env.example .env    # add your API key
 docker compose up -d
 docker compose logs -f
 ```
 
-## Deploying
+Compose builds the image locally and publishes the port on `0.0.0.0`, so the
+LAN can reach it. That is what makes the phone shortcut work.
+
+## Deploying to a registry
+
+Only needed if you build on one machine and run on another. If you build
+directly on the box that runs it, `docker compose up -d --build` is enough.
+
+Point the scripts at your own registry — this writes to your `~/.npmrc`, not to
+the repo, so it stays out of version control:
 
 ```bash
-npm run deploy          # build + push to registry.garit.au
+npm config set hydrawise-proxy:image registry.example.com/hydrawise-proxy
+npm run deploy
 ```
 
-Then on the server:
+Then on the target host, set `IMAGE` in `.env` to the same value and:
 
 ```bash
 docker compose pull && docker compose up -d
 ```
 
-The image name and target platform live in the `config` block of
-`package.json`. Bump `version` there to cut a new tag — deploying twice on the
-same version overwrites the existing tag in the registry.
+Builds are pinned to `linux/amd64` (`config.platform` in `package.json`), since
+the common case is building on an Apple Silicon Mac for an x86_64 server. If
+you deploy to a Raspberry Pi or other arm64 host, change it to `linux/arm64`.
+
+Bump `version` in `package.json` to cut a new tag; deploying twice on the same
+version overwrites the existing tag in the registry.
 
 ## iOS Shortcut
 
@@ -120,18 +154,40 @@ Two things that bite:
 
 ## Security
 
-**There is no request auth.** Whoever can reach the port can run the
-irrigation. Containment is entirely the network binding:
+Read this bit before deploying, not after.
 
-- `BIND_ADDR=0.0.0.0` (default) — reachable by anything on the LAN
-- `BIND_ADDR=127.0.0.1` — reachable only from the server itself
+**There is no request authentication.** Anything that can reach the port can
+start or stop your irrigation. There is no password, no token, no allowlist.
+Containment is entirely the network binding:
 
-That is an acceptable trade on a home network and a bad one anywhere the host
-is internet-facing. Never port-forward this. If it ever needs to be exposed,
-add a shared-secret header check first — Shortcuts supports request headers, so
-the phone side costs one field.
+- `BIND_ADDR=0.0.0.0` (compose default) — reachable by anything on your LAN
+- `BIND_ADDR=127.0.0.1` — reachable only from the host itself
 
-The container runs as `nobody` with a read-only root filesystem and all
+That is a reasonable trade on a home network, where the realistic worst case is
+a housemate or a compromised smart TV wasting some water. It is a bad trade
+anywhere the host is reachable from the internet.
+
+So:
+
+- **Do not port-forward `8123`.** An unauthenticated irrigation trigger on the
+  public internet will eventually be found and used.
+- **Do not run this on a VPS or anything with a public IP** without adding auth
+  first.
+- For access away from home, use a VPN — [Tailscale](https://tailscale.com) is
+  the least painful, and the shortcut then just points at the Tailscale address.
+
+If you need real auth, the smallest honest version is a shared secret: check a
+header such as `x-proxy-token` against an environment variable using
+`crypto.timingSafeEqual`, and reject anything that does not match. iOS Shortcuts
+supports request headers directly, so the phone side is one extra field. That
+is not implemented here — the loopback-or-LAN binding is the entire security
+model, and it is stated plainly rather than hidden behind a false sense of one.
+
+Your Hydrawise API key never leaves the server: it lives in `.env` (gitignored)
+and is injected as an environment variable. The phone only ever talks to the
+proxy.
+
+The container runs as `nobody` with a read-only root filesystem and all Linux
 capabilities dropped.
 
 ## Hydrawise API notes
@@ -143,7 +199,7 @@ Behaviour confirmed against a real controller, since the v1.6 docs are thin:
   four zones at `RUN_SECONDS=1800` is about two hours end to end.
 - `suspendall` needs no additional parameters; the bare action stops everything.
 - `period_id=999` is what the docs pair with `custom`. Its exact meaning is not
-  documented anywhere I could find — it is exposed as `RUN_PERIOD_ID` in case a
+  documented anywhere obvious — it is exposed as `RUN_PERIOD_ID` in case a
   different value turns out to matter.
 
 In `/status`, each relay's `run` is its programmed duration and `time` counts
@@ -164,3 +220,21 @@ stops using the cached bad image.
 **Empty notification from the Shortcut** — the request failed. Errors come back
 as `{"error": …}` with no `message` key. Add a Quick Look action after step 1 to
 see the raw response.
+
+**`API key not valid`** — the proxy reached Hydrawise but the key was rejected.
+Check for a stray space or newline in `.env`, and that the key belongs to the
+account the controller is registered to.
+
+## Contributing
+
+Issues and pull requests welcome. This scratches one specific itch and is
+deliberately small; the most useful contributions are corrections to the
+Hydrawise API notes above, since that behaviour was derived by observation
+rather than from documentation and may differ across controller models.
+
+## License
+
+ISC — see [LICENSE](LICENSE).
+
+Not affiliated with Hunter Industries or Hydrawise. Watering your garden is
+your own responsibility; check that a cycle finished rather than assuming.

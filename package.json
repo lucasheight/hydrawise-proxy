@@ -7,7 +7,7 @@
   "type": "commonjs",
   "main": "server.js",
   "config": {
-    "image": "registry.garit.au/hydrawise-proxy",
+    "image": "hydrawise-proxy",
     "platform": "linux/amd64"
   },
   "scripts": {

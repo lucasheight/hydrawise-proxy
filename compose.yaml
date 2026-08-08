@@ -1,7 +1,7 @@
 services:
   hydrawise-proxy:
     build: .
-    image: registry.garit.au/hydrawise-proxy:latest
+    image: ${IMAGE:-hydrawise-proxy:latest}
     container_name: hydrawise-proxy
     restart: unless-stopped
 
