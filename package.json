@@ -6,15 +6,11 @@
   "author": "Lynden Garrett",
   "type": "commonjs",
   "main": "server.js",
-  "config": {
-    "image": "hydrawise-proxy",
-    "platform": "linux/amd64"
-  },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node server.js",
-    "docker:build": "docker build --platform $npm_package_config_platform -t $npm_package_config_image:$npm_package_version -t $npm_package_config_image:latest .",
-    "docker:push": "docker push $npm_package_config_image:$npm_package_version && docker push $npm_package_config_image:latest",
+    "docker:build": "docker build --platform ${PLATFORM:-linux/amd64} -t ${IMAGE:-hydrawise-proxy}:$npm_package_version -t ${IMAGE:-hydrawise-proxy}:latest .",
+    "docker:push": "docker push ${IMAGE:-hydrawise-proxy}:$npm_package_version && docker push ${IMAGE:-hydrawise-proxy}:latest",
     "deploy": "npm run docker:build && npm run docker:push"
   }
 }

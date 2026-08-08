@@ -105,13 +105,16 @@ LAN can reach it. That is what makes the phone shortcut work.
 Only needed if you build on one machine and run on another. If you build
 directly on the box that runs it, `docker compose up -d --build` is enough.
 
-Point the scripts at your own registry — this writes to your `~/.npmrc`, not to
-the repo, so it stays out of version control:
+Point the scripts at your own registry with `IMAGE` — the repository path, with
+no tag on the end:
 
 ```bash
-npm config set hydrawise-proxy:image registry.example.com/hydrawise-proxy
-npm run deploy
+IMAGE=registry.example.com/hydrawise-proxy npm run deploy
 ```
+
+That tags and pushes both `:<version>` and `:latest`. To avoid repeating it,
+export `IMAGE` in your shell profile; note that npm does **not** read `.env`,
+so putting it there only affects Compose.
 
 Then on the target host, set `IMAGE` in `.env` to the same value and:
 
@@ -119,9 +122,15 @@ Then on the target host, set `IMAGE` in `.env` to the same value and:
 docker compose pull && docker compose up -d
 ```
 
-Builds are pinned to `linux/amd64` (`config.platform` in `package.json`), since
-the common case is building on an Apple Silicon Mac for an x86_64 server. If
-you deploy to a Raspberry Pi or other arm64 host, change it to `linux/arm64`.
+| Variable | Default | Used by |
+| --- | --- | --- |
+| `IMAGE` | `hydrawise-proxy` | Both — repository path, no tag |
+| `TAG` | `latest` | Compose — which tag to run |
+| `PLATFORM` | `linux/amd64` | `npm run docker:build` |
+
+`PLATFORM` defaults to `linux/amd64` because the common case is building on an
+Apple Silicon Mac for an x86_64 server. Deploying to a Raspberry Pi or other
+arm64 host? Use `PLATFORM=linux/arm64`.
 
 Bump `version` in `package.json` to cut a new tag; deploying twice on the same
 version overwrites the existing tag in the registry.

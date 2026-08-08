@@ -1,7 +1,7 @@
 services:
   hydrawise-proxy:
     build: .
-    image: ${IMAGE:-hydrawise-proxy:latest}
+    image: ${IMAGE:-hydrawise-proxy}:${TAG:-latest}
     container_name: hydrawise-proxy
     restart: unless-stopped
 
