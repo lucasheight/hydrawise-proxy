@@ -1,0 +1,11 @@
+# Overlay for building from source instead of pulling the published image.
+#
+#   docker compose -f compose.yaml -f compose.build.yaml up -d --build
+#
+# Useful when hacking on server.js, or if you would rather not run someone
+# else's image on your network — which is a perfectly reasonable position.
+services:
+  hydrawise-proxy:
+    build: .
+    image: hydrawise-proxy:local
+    pull_policy: build

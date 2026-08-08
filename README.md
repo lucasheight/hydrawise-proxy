@@ -89,21 +89,48 @@ curl localhost:8123/status
 Note that this binds to `127.0.0.1` by default, so your phone cannot reach it
 yet. That is deliberate — see [Security](#security).
 
-For anything permanent, use Docker Compose:
+For anything permanent, use Docker Compose. A prebuilt multi-arch image is
+published to GHCR, so there is nothing to build:
 
 ```bash
-cp .env.example .env    # add your API key
+curl -O https://raw.githubusercontent.com/lucasheight/hydrawise-proxy/main/compose.yaml
+curl -o .env https://raw.githubusercontent.com/lucasheight/hydrawise-proxy/main/.env.example
+# put your API key in .env
 docker compose up -d
 docker compose logs -f
 ```
 
-Compose builds the image locally and publishes the port on `0.0.0.0`, so the
-LAN can reach it. That is what makes the phone shortcut work.
+The image covers `linux/amd64` and `linux/arm64`, so the same command works on
+a Raspberry Pi or an x86_64 box. Compose publishes the port on `0.0.0.0`, which
+is what lets the phone reach it.
 
-## Deploying to a registry
+To build from source instead — worth doing if you would rather not run someone
+else's image on your network:
 
-Only needed if you build on one machine and run on another. If you build
-directly on the box that runs it, `docker compose up -d --build` is enough.
+```bash
+git clone https://github.com/lucasheight/hydrawise-proxy
+cd hydrawise-proxy
+cp .env.example .env    # add your API key
+docker compose -f compose.yaml -f compose.build.yaml up -d --build
+```
+
+## Publishing
+
+Pushing a tag builds and publishes a multi-arch image to GHCR automatically via
+[`.github/workflows/publish.yml`](.github/workflows/publish.yml):
+
+```bash
+npm version patch     # or minor / major — commits and tags
+git push --follow-tags
+```
+
+Pushes to `main` refresh `:latest`; tags additionally publish `:1.2.3` and
+`:1.2`. Nothing needs to be built or pushed from your laptop.
+
+### Publishing to your own registry
+
+Only needed if you want the image somewhere other than GHCR — a private
+registry, say.
 
 Set `IMAGE` in `.env` to your registry path, with no tag on the end:
 
