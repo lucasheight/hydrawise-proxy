@@ -9,8 +9,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node server.js",
-    "docker:build": "docker build --platform ${PLATFORM:-linux/amd64} -t ${IMAGE:-hydrawise-proxy}:$npm_package_version -t ${IMAGE:-hydrawise-proxy}:latest .",
-    "docker:push": "docker push ${IMAGE:-hydrawise-proxy}:$npm_package_version && docker push ${IMAGE:-hydrawise-proxy}:latest",
+    "docker:build": "sh -c '_I=$IMAGE; _P=$PLATFORM; set -a; [ -f .env ] && . ./.env; set +a; IMAGE=${_I:-$IMAGE}; PLATFORM=${_P:-$PLATFORM}; set -x; docker build --platform ${PLATFORM:-linux/amd64} -t ${IMAGE:-hydrawise-proxy}:$npm_package_version -t ${IMAGE:-hydrawise-proxy}:latest .'",
+    "docker:push": "sh -c '_I=$IMAGE; set -a; [ -f .env ] && . ./.env; set +a; IMAGE=${_I:-$IMAGE}; set -x; docker push ${IMAGE:-hydrawise-proxy}:$npm_package_version && docker push ${IMAGE:-hydrawise-proxy}:latest'",
     "deploy": "npm run docker:build && npm run docker:push"
   }
 }

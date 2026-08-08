@@ -105,16 +105,25 @@ LAN can reach it. That is what makes the phone shortcut work.
 Only needed if you build on one machine and run on another. If you build
 directly on the box that runs it, `docker compose up -d --build` is enough.
 
-Point the scripts at your own registry with `IMAGE` — the repository path, with
-no tag on the end:
+Set `IMAGE` in `.env` to your registry path, with no tag on the end:
 
 ```bash
-IMAGE=registry.example.com/hydrawise-proxy npm run deploy
+IMAGE=registry.example.com/hydrawise-proxy
 ```
 
-That tags and pushes both `:<version>` and `:latest`. To avoid repeating it,
-export `IMAGE` in your shell profile; note that npm does **not** read `.env`,
-so putting it there only affects Compose.
+Then:
+
+```bash
+npm run deploy
+```
+
+That tags and pushes both `:<version>` and `:latest`. The deploy scripts read
+`.env` themselves, so the same file configures Compose and deploys. A variable
+set on the command line still wins, which is handy for one-offs:
+
+```bash
+PLATFORM=linux/arm64 npm run deploy
+```
 
 Then on the target host, set `IMAGE` in `.env` to the same value and:
 
@@ -122,11 +131,13 @@ Then on the target host, set `IMAGE` in `.env` to the same value and:
 docker compose pull && docker compose up -d
 ```
 
+All three are read from `.env`, or from the environment:
+
 | Variable | Default | Used by |
 | --- | --- | --- |
 | `IMAGE` | `hydrawise-proxy` | Both — repository path, no tag |
 | `TAG` | `latest` | Compose — which tag to run |
-| `PLATFORM` | `linux/amd64` | `npm run docker:build` |
+| `PLATFORM` | `linux/amd64` | `npm run deploy` |
 
 `PLATFORM` defaults to `linux/amd64` because the common case is building on an
 Apple Silicon Mac for an x86_64 server. Deploying to a Raspberry Pi or other
