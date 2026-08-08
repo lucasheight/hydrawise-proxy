@@ -39,6 +39,27 @@ All via environment. `API_KEY` is required and the server exits if it is missing
 Copy `.env.example` to `.env` and fill in `API_KEY`. `.env` is gitignored; keep
 the key out of source.
 
+### Getting an API key
+
+Sign in to the Hydrawise web app at <https://app.hydrawise.com> with the same
+account the controller is registered to, then find the API key under your
+account settings — it has lived under *Account Details* / *My Account*, though
+Hunter has moved it around between UI revisions, so look for "API key" or
+"Generate API Key" if that path does not match what you see. The mobile app
+does not expose it; use the web app.
+
+The key is account-wide, not per-controller, and looks like `XXXX-XXXX-XXXX-XXXX`.
+Treat it as a password: anyone holding it can run your irrigation. It can be
+regenerated from the same screen, which immediately invalidates the old one —
+worth doing if it ever lands somewhere it should not, and the reason it is read
+from the environment rather than written into `server.js`.
+
+Hydrawise rate-limits the API fairly aggressively per key. The `/status`
+response includes a `nextpoll` field — 60 seconds on this account — which is the
+interval it expects you to respect. Nothing here polls on a timer, but do not
+add one that ignores it, and note this is why the container health check hits
+the proxy itself rather than calling `/status` every 30 seconds.
+
 ## Running
 
 Locally:
