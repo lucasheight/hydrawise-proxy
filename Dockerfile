@@ -1,5 +1,12 @@
+# Dependencies are installed in a throwaway stage so npm and its cache never
+# reach the runtime image.
+FROM node:22-alpine AS deps
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
+
 # Plain Alpine + the nodejs package, rather than node:22-alpine — same Node 22,
-# roughly half the image size, since we need no npm or toolchain at runtime.
+# roughly half the size, since nothing at runtime needs npm or a toolchain.
 FROM alpine:3.22
 
 RUN apk add --no-cache nodejs
@@ -14,9 +21,8 @@ ENV PORT=8123
 
 WORKDIR /app
 
-# No dependency install step: the proxy is Node stdlib only, so there is no
-# package-lock.json and nothing for npm to fetch.
-COPY package.json server.js ./
+COPY --from=deps /app/node_modules ./node_modules
+COPY package.json server.js mqtt-publisher.js ./
 
 USER nobody
 EXPOSE 8123
