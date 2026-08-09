@@ -24,6 +24,14 @@ services:
       RUN_SECONDS: ${RUN_SECONDS:-1800}
       RUN_PERIOD_ID: ${RUN_PERIOD_ID:-999}
 
+      # Optional. Empty MQTT_URL means no broker connection is attempted.
+      MQTT_URL: ${MQTT_URL:-}
+      MQTT_USERNAME: ${MQTT_USERNAME:-}
+      MQTT_PASSWORD: ${MQTT_PASSWORD:-}
+      MQTT_PREFIX: ${MQTT_PREFIX:-hydrawise}
+      MQTT_DISCOVERY: ${MQTT_DISCOVERY:-1}
+      MQTT_DISCOVERY_PREFIX: ${MQTT_DISCOVERY_PREFIX:-homeassistant}
+
     # Nothing is ever written to disk, so lock the filesystem down.
     read_only: true
     cap_drop:

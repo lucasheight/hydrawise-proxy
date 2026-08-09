@@ -15,7 +15,8 @@ its own the next morning.
 The reverse is handy too: it is unusually dry, and you want an extra cycle on a
 weekend without going through the same rigmarole.
 
-Node standard library only — no dependencies, nothing to audit but one file.
+Node standard library only, apart from an MQTT client that is loaded solely if
+you turn [MQTT](#mqtt) on. Leave it off and nothing but stdlib runs.
 
 ## Do you even need this?
 
@@ -120,7 +121,8 @@ Three behaviours worth knowing:
   cached copy to fall back on, it is still a 502. `/start` and `/stop` always
   fail loudly — they are actions, not state.
 - **An idle proxy makes no upstream calls at all.** Refresh happens on request,
-  not on a timer, so it can sit untouched for weeks between rain events.
+  not on a timer, so it can sit untouched for weeks between rain events. Turning
+  [MQTT](#mqtt) on changes this — push means polling regardless of traffic.
 
 `GET /status?fresh=1` bypasses the cache when you genuinely need current data —
 useful right after triggering a run to see what got queued.
@@ -137,6 +139,11 @@ All via environment. `API_KEY` is required and the server exits if it is missing
 | `PORT` | `8123` | Listen port |
 | `HOST` | `127.0.0.1` | Listen address. The Docker image sets `0.0.0.0` |
 | `BIND_ADDR` | `0.0.0.0` | *(compose only)* Host interface the port publishes on |
+| `MQTT_URL` | *(unset)* | Broker URL. Unset disables [MQTT](#mqtt) entirely |
+| `MQTT_USERNAME` / `MQTT_PASSWORD` | *(unset)* | Broker credentials, if required |
+| `MQTT_PREFIX` | `hydrawise` | Topic root |
+| `MQTT_DISCOVERY` | `1` | Home Assistant discovery; `0` to disable |
+| `MQTT_DISCOVERY_PREFIX` | `homeassistant` | Discovery topic root |
 
 Copy `.env.example` to `.env` and fill in `API_KEY`. `.env` is gitignored; keep
 the key out of source.
@@ -268,6 +275,71 @@ Two things that bite:
   Local Network → Shortcuts.
 - These hit a private IP, so they only work on home Wi-Fi. For access from
   anywhere use a VPN such as Tailscale. Do not port-forward `8123` — see below.
+
+## MQTT
+
+Optional, and off unless `MQTT_URL` is set. It connects to a broker **you
+already run** — none is bundled, and the only dependency is a client library,
+which is not even loaded when MQTT is off.
+
+```bash
+MQTT_URL=mqtt://broker.lan:1883
+MQTT_USERNAME=…        # if your broker requires auth
+MQTT_PASSWORD=…
+```
+
+`mqtt://`, `mqtts://`, `ws://` and `wss://` all work.
+
+### Topics
+
+All retained, so a dashboard restarting gets current state immediately.
+
+| Topic | Payload |
+| --- | --- |
+| `hydrawise/availability` | `online` / `offline` |
+| `hydrawise/state` | `{ running, zone, relay_id, seconds_left, zone_type, zone_count, updated }` |
+| `hydrawise/zone/<relay_id>/state` | `{ name, running, seconds_left, run_seconds, next_run_in, next_run, type }` |
+
+`availability` is a Last Will, so the broker publishes `offline` even if the
+proxy is killed outright — a dashboard shows unavailable rather than a stale
+`running: false`.
+
+`seconds_left` is a genuine countdown on the active zone, not a boolean, so a
+progress bar is possible. It is populated only while running; the programmed
+duration is `run_seconds` instead. Hydrawise overloads one field for both, and
+splitting them here avoids a whole class of subtle dashboard bug.
+
+### Home Assistant
+
+Discovery is on by default, so entities appear by themselves: a **running**
+binary sensor, **active zone** and **time remaining** sensors, and one binary
+sensor per zone, all grouped under a single Hydrawise device and tied to the
+availability topic. Set `MQTT_DISCOVERY=0` to publish state without creating
+entities.
+
+### Polling
+
+With MQTT on, `/status` is polled on a timer at the interval the payload's
+`nextpoll` asks for, since push implies watching even when nobody is making an
+HTTP request. It goes through the same cache the HTTP endpoints use, so
+Hydrawise still sees exactly one caller however many dashboards are watching.
+
+A failed poll backs off — starting at a minute, doubling to a fifteen-minute
+ceiling — because polling harder is the wrong answer to a rate limit.
+
+Turning MQTT on therefore ends the "idle proxy makes no upstream calls"
+property: it polls continuously, around 1400 calls a day at the default
+interval.
+
+`/start` and `/stop` trigger a publish a couple of seconds later rather than
+waiting out the interval, so the dashboard catches up with the tap.
+
+### Broker outage
+
+Nothing about MQTT can take the HTTP endpoints down. Connection errors are
+logged, the client reconnects on its own, and `/status`, `/start` and `/stop`
+keep working throughout — stopping the sprinklers in the rain is the reason
+this exists, and it cannot depend on a broker being up.
 
 ## Security
 

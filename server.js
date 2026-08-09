@@ -118,8 +118,11 @@ function refreshStatus() {
 // Starting or stopping changes what the next poll should report, so drop the
 // cached copy rather than letting a dashboard show a stale "running" for up to
 // a minute after the sprinklers were told to stop.
+let onStatusInvalidated = null;
+
 function invalidateStatus() {
     statusCache.fetchedAt = 0;
+    if (onStatusInvalidated) onStatusInvalidated();
 }
 
 async function getStatus({ fresh = false } = {}) {
@@ -212,17 +215,35 @@ const server = http.createServer(async (req, res) => {
     }
 });
 
+// Opt-in. With no MQTT_URL the module is never even loaded, so its dependency
+// tree stays out of the process for anyone who only wants the HTTP endpoints.
+let mqttPublisher = null;
+if (process.env.MQTT_URL) {
+    const { start } = require('./mqtt-publisher');
+    // Polls through the same cache the HTTP endpoints use, so Hydrawise still
+    // sees a single caller no matter how many things are watching.
+    mqttPublisher = start({
+        url: process.env.MQTT_URL,
+        fetchStatus: () => getStatus(),
+    });
+    // Push an update shortly after a start or stop instead of waiting out the
+    // poll interval, so the dashboard reflects the tap almost immediately.
+    onStatusInvalidated = () => mqttPublisher.refreshSoon();
+}
+
 server.listen(PORT, HOST, () => {
     const run = RUN_SECONDS === undefined
         ? 'bare runall (no period_id/custom)'
         : `${RUN_SECONDS}s, period_id=${RUN_PERIOD_ID}`;
     console.log(`[hydrawise-proxy] listening on http://${HOST}:${PORT} — /start default: ${run}`);
+    if (!mqttPublisher) console.log('[hydrawise-proxy] MQTT disabled (no MQTT_URL)');
 });
 
 // Without this, `docker stop` waits out its grace period before SIGKILL.
 for (const signal of ['SIGTERM', 'SIGINT']) {
-    process.on(signal, () => {
+    process.on(signal, async () => {
         console.log(`[${signal}] shutting down`);
+        if (mqttPublisher) await mqttPublisher.stop();
         server.close(() => process.exit(0));
     });
 }
