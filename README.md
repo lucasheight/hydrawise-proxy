@@ -281,10 +281,36 @@ Behaviour confirmed against a real controller, since the v1.6 docs are thin:
   documented anywhere obvious — it is exposed as `RUN_PERIOD_ID` in case a
   different value turns out to matter.
 
-In `/status`, each relay's `run` is its programmed duration and `time` counts
-down to its next start. Because zones are sequential, consecutive `time` values
-differ by the previous zone's `run` — a useful way to confirm what a `/start`
-actually queued.
+### Reading zone state from /status
+
+`run` and `time` mean different things depending on what a zone is doing, which
+is the part that catches people out:
+
+| State | `type` | `time` | `timestr` | `run` |
+| --- | --- | --- | --- | --- |
+| Running now | `106` | `1` | `"Now"` | **seconds remaining** |
+| Queued | `106` | seconds until start | clock time | full duration of the upcoming run |
+| Idle | `9` | seconds to next scheduled run | day name | programmed duration |
+
+So `type` alone does not tell you whether a zone is running — queued zones share
+`type: 106`. The running zone is the one that has also reached `time <= 1`:
+
+```js
+const active = relays.find(r => r.type === 106 && r.time <= 1);
+// active ? { zone: active.name, secondsLeft: active.run } : null
+```
+
+Because zones run strictly back to back, a running zone's `time + run` equals
+the next zone's `time`, and queued zones chain the same way. That is a handy
+way to confirm what a `/start` actually queued — and it is how the table above
+was verified.
+
+There is **no `running` array** in the payload, despite some third-party
+integrations assuming one.
+
+Captured payloads are in [`samples/`](samples/), along with the working. Note
+they come from a *manual* `runall`; whether a *scheduled* program also reports
+`type: 106` is unverified.
 
 ## Troubleshooting
 
