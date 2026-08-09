@@ -8,6 +8,10 @@ The sprinklers are running, or about to, the weather has changed, and you want
 them off *now* — not after unlocking your phone, finding the app, waiting for it
 to load, and navigating to the right screen. One tap instead.
 
+Stop suspends until midnight rather than just cancelling the current run, so
+that tap also skips the rest of the day's schedule and everything resumes on
+its own the next morning.
+
 The reverse is handy too: it is unusually dry, and you want an extra cycle on a
 weekend without going through the same rigmarole.
 
@@ -34,7 +38,7 @@ of its own by design, which is fine on a home LAN and not fine anywhere else.
 
 | Method | Path | Does |
 | --- | --- | --- |
-| `POST` | `/stop` | `suspendall` — stops everything immediately |
+| `POST` | `/stop` | `suspendall` — stops everything now, and suspends until midnight |
 | `POST` | `/start` | `runall` — every zone for `RUN_SECONDS`, run back to back |
 | `GET` | `/status` | Returns the raw `statusschedule.php` payload — zones, run times, next scheduled run |
 
@@ -228,7 +232,12 @@ Behaviour confirmed against a real controller, since the v1.6 docs are thin:
 - `custom` on `runall` is seconds **per zone**, not a total across zones.
 - Zones run **sequentially**, never together — the controller queues them, so
   four zones at `RUN_SECONDS=1800` is about two hours end to end.
-- `suspendall` needs no additional parameters; the bare action stops everything.
+- `suspendall` needs no additional parameters. The bare action stops whatever is
+  running *and* suspends until 00:00 the following day — it does not merely
+  cancel the current cycle. So one tap on Stop when it starts raining also
+  skips the rest of the day's scheduled runs, and normal watering resumes by
+  itself the next morning. Convenient if your programs run after sunrise; worth
+  knowing if you water before midnight, since those runs would be skipped too.
 - `period_id=999` is what the docs pair with `custom`. Its exact meaning is not
   documented anywhere obvious — it is exposed as `RUN_PERIOD_ID` in case a
   different value turns out to matter.
