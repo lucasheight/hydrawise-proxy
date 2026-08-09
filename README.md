@@ -15,14 +15,53 @@ its own the next morning.
 The reverse is handy too: it is unusually dry, and you want an extra cycle on a
 weekend without going through the same rigmarole.
 
-The Hydrawise API wants the key in the query string, which makes it awkward to
-call from a phone — you would be pasting a credential into a shortcut. This
-wraps it instead: the key lives on a machine on your network, and the phone
-hits three plain endpoints on the LAN.
-
 Node standard library only — no dependencies, nothing to audit but one file.
 
-### You will need
+## Do you even need this?
+
+Maybe not, and it is worth two minutes of your time to decide before setting up
+a server.
+
+The Hydrawise API is a plain GET with the key in the query string, so an iOS
+Shortcut can call it directly with no proxy at all:
+
+```
+https://api.hydrawise.com/api/v1/setzone.php?api_key=YOUR-KEY&action=suspendall
+```
+
+That is genuinely simpler — nothing to host, nothing to maintain, nothing to
+update. **And it works from anywhere**, on cellular or someone else's Wi-Fi,
+which this proxy does not: it is LAN-only by design, so the rain-stop only works
+while you are home.
+
+If you are one person with one phone, stop reading and go build that shortcut.
+
+### What the proxy is actually for
+
+**Your API key never reaches the phone.** In a direct shortcut the key sits in
+an iCloud-synced item, readable by anyone who picks up an unlocked device. More
+importantly, it means **you cannot share the shortcut**. Sending a working
+direct shortcut to a neighbour hands them a credential that controls your
+irrigation. A shortcut pointed at this proxy contains nothing but a LAN address,
+so it is safe to pass around — everyone runs their own proxy with their own key.
+
+**Configuration lives in one place.** Run durations and the awkward
+`period_id`/`custom` parameters sit on the server, not duplicated across every
+shortcut on every phone. Changing the watering time is one edit. Rotating the
+key is one edit, and every client keeps working rather than needing to be
+tracked down.
+
+**Several clients can share it.** Family phones, Home Assistant, a `curl` in
+cron — all hitting the same endpoints, none of them holding a credential.
+
+**There is somewhere to put logic.** Check a rain sensor before starting, refuse
+to run twice in an hour, log what ran and when. None of that fits in a URL.
+
+So: one person, one phone, wants it working away from home → call the API
+directly. More than one person or device, or you would rather the key stayed off
+phones → this is what the proxy is for.
+
+## You will need
 
 - A Hunter Hydrawise controller on your account, and an API key ([where to find
   it](#getting-an-api-key))
