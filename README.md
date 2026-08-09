@@ -3,9 +3,13 @@
 A small HTTP proxy in front of the Hydrawise v1 API, so an iOS Shortcut can
 start or stop a full irrigation cycle with one tap.
 
-The use case it was built for: it is unusually dry, you want to run an extra
-cycle on a weekend, and you would rather tap your phone than open an app and
-navigate to the right screen.
+The use case it was built for is **stopping a cycle when it starts raining**.
+The sprinklers are running, or about to, the weather has changed, and you want
+them off *now* — not after unlocking your phone, finding the app, waiting for it
+to load, and navigating to the right screen. One tap instead.
+
+The reverse is handy too: it is unusually dry, and you want an extra cycle on a
+weekend without going through the same rigmarole.
 
 The Hydrawise API wants the key in the query string, which makes it awkward to
 call from a phone — you would be pasting a credential into a shortcut. This
@@ -30,9 +34,9 @@ of its own by design, which is fine on a home LAN and not fine anywhere else.
 
 | Method | Path | Does |
 | --- | --- | --- |
-| `GET` | `/status` | Returns the raw `statusschedule.php` payload — zones, run times, next scheduled run |
-| `POST` | `/start` | `runall` — every zone for `RUN_SECONDS`, run back to back |
 | `POST` | `/stop` | `suspendall` — stops everything immediately |
+| `POST` | `/start` | `runall` — every zone for `RUN_SECONDS`, run back to back |
+| `GET` | `/status` | Returns the raw `statusschedule.php` payload — zones, run times, next scheduled run |
 
 `POST /start?seconds=N` overrides the duration for that call, which is the easy
 way to test without waiting out a full cycle.
@@ -142,21 +146,34 @@ services:
 
 ## iOS Shortcut
 
+Build the **Stop** one first — it is the one you will want in a hurry, standing
+at a window watching rain fall on your running sprinklers.
+
 Three actions, in order:
 
-1. **Get Contents of URL** — URL `http://<server-ip>:8123/start`, Method `POST`
+1. **Get Contents of URL** — URL `http://<server-ip>:8123/stop`, Method `POST`
    (expand the action with the ▸ arrow to reach Method)
 2. **Get Dictionary Value** — Get `Value` for key `message` in `Contents of URL`
 3. **Show Notification** — body set to the `Dictionary Value` variable
 
-Step 3 surfaces Hydrawise's own confirmation (*"Starting Front Rotors, …"*), so
-a tap gives real feedback rather than failing silently. No JSON parsing step is
-needed: the proxy sends `content-type: application/json`, so Shortcuts converts
-the body to a dictionary on its own.
+Step 3 surfaces Hydrawise's own confirmation, so a tap gives real feedback
+rather than failing silently — which matters most when you are trying to stop
+something. No JSON parsing step is needed: the proxy sends
+`content-type: application/json`, so Shortcuts converts the body to a dictionary
+on its own.
 
-Duplicate the shortcut and change the URL to `/stop` for the other direction.
-Then Share → **Add to Home Screen**, or just say *"Hey Siri, Start Irrigation"* —
-a shortcut's name is its Siri phrase automatically.
+Name it **"Stop Irrigation"**, then Share → **Add to Home Screen** so it is one
+tap from the lock screen. Siri works with no extra setup, since a shortcut's
+name is its phrase: *"Hey Siri, Stop Irrigation"* — useful when your hands are
+full or the phone is across the room.
+
+Then duplicate it, change the URL to `/start`, and rename to **"Start
+Irrigation"** for the dry-weekend direction.
+
+If you use **Back Tap** (Settings → Accessibility → Touch → Back Tap), map it to
+Stop rather than Start. Back Tap misfires on bumps and pockets, and an accidental
+stop costs nothing while an accidental start is 30 minutes of watering nobody
+asked for.
 
 Two things that bite:
 
