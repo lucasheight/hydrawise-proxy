@@ -237,6 +237,11 @@ Three actions, in order:
 2. **Get Dictionary Value** — Get `Value` for key `message` in `Contents of URL`
 3. **Show Notification** — body set to the `Dictionary Value` variable
 
+If you have a reverse proxy, use a hostname rather than the IP — see
+[adding auth without touching the code](#adding-auth-without-touching-the-code).
+A shortcut pointed at a raw IP breaks the day the server's address changes,
+which you will discover at the worst possible moment.
+
 Step 3 surfaces Hydrawise's own confirmation, so a tap gives real feedback
 rather than failing silently — which matters most when you are trying to stop
 something. No JSON parsing step is needed: the proxy sends
@@ -288,12 +293,35 @@ So:
 - For access away from home, use a VPN — [Tailscale](https://tailscale.com) is
   the least painful, and the shortcut then just points at the Tailscale address.
 
-If you need real auth, the smallest honest version is a shared secret: check a
-header such as `x-proxy-token` against an environment variable using
-`crypto.timingSafeEqual`, and reject anything that does not match. iOS Shortcuts
-supports request headers directly, so the phone side is one extra field. That
-is not implemented here — the loopback-or-LAN binding is the entire security
-model, and it is stated plainly rather than hidden behind a false sense of one.
+### Adding auth without touching the code
+
+The proxy has no authentication of its own and none is planned as a
+requirement, so the practical way to add it is a reverse proxy in front — most
+people running this already have one.
+
+With [Nginx Proxy Manager](https://nginxproxymanager.com), point a host at
+`http://<server-ip>:8123`, give it a certificate, and attach an **Access List**
+with basic auth. Traefik, Caddy and plain nginx all do the equivalent.
+
+Two things fall out of this beyond the auth itself:
+
+- **A hostname instead of an IP.** `https://water.example.lan/stop` keeps
+  working when the server's address changes; `http://192.168.1.42:8123/stop`
+  silently breaks and you find out during the next downpour.
+- **TLS**, so the request is not in the clear on your network.
+
+On the phone, basic auth is one extra row in the shortcut's **Headers**
+section:
+
+```
+Authorization: Basic <base64 of user:password>
+```
+
+Generate it with `printf 'user:password' | base64`. Prefer that over putting
+credentials in the URL, which is deprecated and unreliable in Shortcuts.
+
+Keep the proxy itself bound to the LAN even behind a reverse proxy — anything
+that can still reach port 8123 directly bypasses whatever the proxy enforces.
 
 Your Hydrawise API key never leaves the server: it lives in `.env` (gitignored)
 and is injected as an environment variable. The phone only ever talks to the
