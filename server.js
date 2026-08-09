@@ -42,13 +42,17 @@ function apiUrl(path, params = {}) {
     return url;
 }
 
-function sendJson(res, status, payload) {
-    const body = JSON.stringify(payload);
+function sendBody(res, status, body, extraHeaders = {}) {
     res.writeHead(status, {
         'content-type': 'application/json',
         'content-length': Buffer.byteLength(body),
+        ...extraHeaders,
     });
     res.end(body);
+}
+
+function sendJson(res, status, payload, extraHeaders = {}) {
+    sendBody(res, status, JSON.stringify(payload), extraHeaders);
 }
 
 async function callApi(url) {
@@ -66,31 +70,99 @@ async function callApi(url) {
 
     // Hydrawise returns plain text on some error paths, so parse defensively.
     try {
-        return JSON.parse(text);
+        return { text, data: JSON.parse(text) };
     } catch {
         throw new Error(`upstream returned non-JSON: ${text.slice(0, 200)}`);
     }
 }
 
-function getStatus() {
-    return callApi(apiUrl('statusschedule.php'));
+// Hydrawise publishes no concrete rate limit; the statusschedule payload's
+// `nextpoll` is the only signal for how often it wants to be asked. Cache
+// accordingly, so a dashboard polling every few seconds costs one upstream
+// call per nextpoll window rather than one per request.
+const FALLBACK_NEXTPOLL_MS = 60_000;
+
+const statusCache = {
+    text: null,
+    fetchedAt: 0,
+    ttlMs: FALLBACK_NEXTPOLL_MS,
+    inflight: null,
+};
+
+function refreshStatus() {
+    // Single-flight: concurrent callers during a refresh share one upstream
+    // request instead of each starting their own.
+    if (statusCache.inflight) return statusCache.inflight;
+
+    const pending = (async () => {
+        const { text, data } = await callApi(apiUrl('statusschedule.php'));
+        const nextpoll = Number(data?.nextpoll);
+        statusCache.text = text;
+        statusCache.fetchedAt = Date.now();
+        statusCache.ttlMs = Number.isFinite(nextpoll) && nextpoll > 0
+            ? nextpoll * 1000
+            : FALLBACK_NEXTPOLL_MS;
+        return text;
+    })();
+
+    statusCache.inflight = pending;
+    pending
+        .catch(() => {})
+        .finally(() => {
+            if (statusCache.inflight === pending) statusCache.inflight = null;
+        });
+
+    return pending;
+}
+
+// Starting or stopping changes what the next poll should report, so drop the
+// cached copy rather than letting a dashboard show a stale "running" for up to
+// a minute after the sprinklers were told to stop.
+function invalidateStatus() {
+    statusCache.fetchedAt = 0;
+}
+
+async function getStatus({ fresh = false } = {}) {
+    const age = Date.now() - statusCache.fetchedAt;
+
+    if (!fresh && statusCache.text !== null && age < statusCache.ttlMs) {
+        return { text: statusCache.text, cache: 'HIT', ageMs: age };
+    }
+
+    try {
+        return { text: await refreshStatus(), cache: 'MISS', ageMs: 0 };
+    } catch (err) {
+        // A dashboard should not go blank because one upstream call failed.
+        // Serve what we have and label it, rather than claiming it is current.
+        if (statusCache.text === null) throw err;
+        console.warn(`[warn] status refresh failed, serving stale: ${err.message}`);
+        return {
+            text: statusCache.text,
+            cache: 'STALE',
+            ageMs: Date.now() - statusCache.fetchedAt,
+        };
+    }
 }
 
 // runall takes period_id plus custom, where custom is seconds *per zone* — the
 // controller then runs the zones sequentially. Both are sent together or not at
 // all, since custom is meaningless without its period_id.
-function runAllZones(seconds) {
+async function runAllZones(seconds) {
     const params = { action: 'runall' };
     if (seconds !== undefined) {
         params.period_id = RUN_PERIOD_ID;
         params.custom = String(seconds);
     }
-    return callApi(apiUrl('setzone.php', params));
+    const { data } = await callApi(apiUrl('setzone.php', params));
+    invalidateStatus();
+    return data;
 }
 
 // Bare suspendall stops everything; confirmed against the controller, no extra params needed.
-function suspendAllZones() {
-    return callApi(apiUrl('setzone.php', { action: 'suspendall' }));
+async function suspendAllZones() {
+    const { data } = await callApi(apiUrl('setzone.php', { action: 'suspendall' }));
+    invalidateStatus();
+    return data;
 }
 
 function parseSeconds(searchParams) {
@@ -111,7 +183,15 @@ const server = http.createServer(async (req, res) => {
 
     try {
         if (method === 'GET' && pathname === '/status') {
-            return sendJson(res, 200, await getStatus());
+            const { text, cache, ageMs } = await getStatus({
+                fresh: searchParams.get('fresh') === '1',
+            });
+            // Body is passed through untouched so consumers see exactly what
+            // Hydrawise returned; cache state goes in headers.
+            return sendBody(res, 200, text, {
+                'x-cache': cache,
+                age: String(Math.floor(ageMs / 1000)),
+            });
         }
 
         if (method === 'POST' && pathname === '/start') {

@@ -1,0 +1,227 @@
+{
+time: 1786245253,
+nextpoll: 60,
+message: "",
+simRelays: 1,
+options: 1,
+stupdate: 0,
+expanders: [],
+sensors: [],
+relays: [
+        {
+relay_id: 1821358,
+time: 1,
+type: 106,
+run: 79,
+relay: 1,
+name: "Front Rotors",
+period: 259200,
+timestr: "Now",
+stop: 1
+        },
+        {
+relay_id: 1821359,
+time: 80,
+type: 106,
+run: 120,
+relay: 2,
+name: "Front Side Mp R",
+period: 259200,
+timestr: "13:15",
+stop: 1
+        },
+        {
+relay_id: 1821361,
+time: 200,
+type: 106,
+run: 120,
+relay: 3,
+name: "Back Rotors",
+period: 259200,
+timestr: "13:17",
+stop: 1
+        },
+        {
+relay_id: 1821362,
+time: 320,
+type: 106,
+run: 120,
+relay: 4,
+name: "Back Garden",
+period: 259200,
+timestr: "13:19",
+stop: 1
+        }
+    ]
+}
+
+{
+time: 1786245353,
+nextpoll: 60,
+message: "",
+simRelays: 1,
+options: 1,
+stupdate: 0,
+expanders: [],
+sensors: [],
+relays: [
+        {
+relay_id: 1821358,
+time: 240247,
+type: 9,
+run: 600,
+relay: 1,
+name: "Front Rotors",
+period: 259200,
+timestr: "Wed",
+stop: 1
+        },
+        {
+relay_id: 1821359,
+time: 1,
+type: 106,
+run: 99,
+relay: 2,
+name: "Front Side Mp R",
+period: 259200,
+timestr: "Now",
+stop: 1
+        },
+        {
+relay_id: 1821361,
+time: 100,
+type: 106,
+run: 120,
+relay: 3,
+name: "Back Rotors",
+period: 259200,
+timestr: "13:17",
+stop: 1
+        },
+        {
+relay_id: 1821362,
+time: 220,
+type: 106,
+run: 120,
+relay: 4,
+name: "Back Garden",
+period: 259200,
+timestr: "13:19",
+stop: 1
+        }
+    ]
+}
+
+{
+time: 1786245462,
+nextpoll: 60,
+message: "",
+simRelays: 1,
+options: 1,
+stupdate: 0,
+expanders: [ ],
+sensors: [ ],
+relays: [
+{
+relay_id: 1821358,
+time: 240138,
+type: 9,
+run: 600,
+relay: 1,
+name: "Front Rotors",
+period: 259200,
+timestr: "Wed",
+stop: 1
+},
+{
+relay_id: 1821359,
+time: 240738,
+type: 9,
+run: 600,
+relay: 2,
+name: "Front Side Mp R",
+period: 259200,
+timestr: "Wed",
+stop: 1
+},
+{
+relay_id: 1821361,
+time: 1,
+type: 106,
+run: 110,
+relay: 3,
+name: "Back Rotors",
+period: 259200,
+timestr: "Now",
+stop: 1
+},
+{
+relay_id: 1821362,
+time: 111,
+type: 106,
+run: 120,
+relay: 4,
+name: "Back Garden",
+period: 259200,
+timestr: "13:19",
+stop: 1
+}
+]
+}
+
+{
+time: 1786245577,
+nextpoll: 60,
+message: "",
+simRelays: 1,
+options: 1,
+stupdate: 0,
+expanders: [ ],
+sensors: [ ],
+relays: [
+{
+relay_id: 1821358,
+time: 240023,
+type: 9,
+run: 600,
+relay: 1,
+name: "Front Rotors",
+period: 259200,
+timestr: "Wed",
+stop: 1
+},
+{
+relay_id: 1821359,
+time: 240623,
+type: 9,
+run: 600,
+relay: 2,
+name: "Front Side Mp R",
+period: 259200,
+timestr: "Wed",
+stop: 1
+},
+{
+relay_id: 1821361,
+time: 241223,
+type: 9,
+run: 480,
+relay: 3,
+name: "Back Rotors",
+period: 259200,
+timestr: "Wed",
+stop: 1
+},
+{
+relay_id: 1821362,
+time: 1,
+type: 106,
+run: 115,
+relay: 4,
+name: "Back Garden",
+period: 259200,
+timestr: "Now",
+stop: 1
+}
+]
+}

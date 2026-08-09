@@ -87,6 +87,44 @@ way to test without waiting out a full cycle.
 Failures return JSON, never a hang: `400` for a bad `seconds`, `404` for an
 unknown path, `502` when Hydrawise itself errors or times out (10s).
 
+### /status is cached
+
+Poll `/status` as often as you like. It is served from memory and only refreshed
+once the payload's own `nextpoll` interval has elapsed — 60 seconds on the
+accounts seen so far. A dashboard refreshing every 2 seconds therefore costs one
+upstream call a minute, not thirty.
+
+This matters because Hunter publishes no concrete rate limit. The
+[support page](https://www.hunterirrigation.com/en-metric/support/hydrawise-rate-limiting-too-many-requests)
+and the API PDF only say to respect `nextpoll`, and Home Assistant's own
+integration has tripped HTTP 429 repeatedly over it. Without caching, it is easy
+to rate-limit your own account with a keen dashboard.
+
+The response body is passed through byte for byte, exactly as Hydrawise returned
+it. Cache state goes in headers instead:
+
+| Header | Meaning |
+| --- | --- |
+| `X-Cache: HIT` | Served from memory |
+| `X-Cache: MISS` | Refreshed from Hydrawise on this request |
+| `X-Cache: STALE` | Refresh failed; this is the last good copy |
+| `Age` | Seconds since that copy was fetched |
+
+Three behaviours worth knowing:
+
+- **`/start` and `/stop` clear the cache**, so the next `/status` reflects what
+  you just did rather than showing a stale "running" for up to a minute after
+  you stopped the sprinklers.
+- **A failed refresh serves the last good payload** with `X-Cache: STALE` rather
+  than a 502, so a dashboard does not go blank over one timed-out call. With no
+  cached copy to fall back on, it is still a 502. `/start` and `/stop` always
+  fail loudly — they are actions, not state.
+- **An idle proxy makes no upstream calls at all.** Refresh happens on request,
+  not on a timer, so it can sit untouched for weeks between rain events.
+
+`GET /status?fresh=1` bypasses the cache when you genuinely need current data —
+useful right after triggering a run to see what got queued.
+
 ## Configuration
 
 All via environment. `API_KEY` is required and the server exits if it is missing.
