@@ -31,6 +31,19 @@ function isRunning(relay) {
     return Number(relay?.time) <= 1;
 }
 
+// A bare host is what most people write, and plain MQTT on 1883 is what they
+// almost always mean. Fill in the scheme rather than making them remember it;
+// mqtts://, ws:// and wss:// still work when given explicitly.
+function normalizeUrl(raw) {
+    const value = String(raw).trim();
+    return /^[a-z][a-z0-9+.-]*:\/\//i.test(value) ? value : `mqtt://${value}`;
+}
+
+// Credentials can legitimately be embedded in the URL, and this gets logged.
+function redact(url) {
+    return url.replace(/\/\/[^/@]*@/, '//***@');
+}
+
 function deriveState(payload) {
     const relays = Array.isArray(payload?.relays) ? payload.relays : [];
     const active = relays.find(isRunning) || null;
@@ -143,7 +156,10 @@ function zoneDiscovery(relay) {
  * whether or not the broker is reachable, because stopping the sprinklers in
  * the rain is the reason this project exists.
  */
-function start({ url, fetchStatus, log = console }) {
+function start({ url: rawUrl, fetchStatus, log = console }) {
+    const url = normalizeUrl(rawUrl);
+    const shown = redact(url);
+
     const client = mqtt.connect(url, {
         username: process.env.MQTT_USERNAME || undefined,
         password: process.env.MQTT_PASSWORD || undefined,
@@ -170,7 +186,7 @@ function start({ url, fetchStatus, log = console }) {
         );
 
     client.on('connect', () => {
-        log.log(`[mqtt] connected to ${url}`);
+        log.log(`[mqtt] connected to ${shown}`);
         publish(TOPIC.availability, 'online');
         if (DISCOVERY) {
             for (const { topic, payload } of discoveryPayloads()) publish(topic, payload);
@@ -252,4 +268,4 @@ function start({ url, fetchStatus, log = console }) {
     return { stop, refreshSoon };
 }
 
-module.exports = { start, deriveState, deriveZone, isRunning, TOPIC };
+module.exports = { start, deriveState, deriveZone, isRunning, normalizeUrl, redact, TOPIC };

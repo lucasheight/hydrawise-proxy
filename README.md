@@ -283,12 +283,14 @@ already run** — none is bundled, and the only dependency is a client library,
 which is not even loaded when MQTT is off.
 
 ```bash
-MQTT_URL=mqtt://broker.lan:1883
+MQTT_URL=broker.lan
 MQTT_USERNAME=…        # if your broker requires auth
 MQTT_PASSWORD=…
 ```
 
-`mqtt://`, `mqtts://`, `ws://` and `wss://` all work.
+A bare host is enough — plain MQTT on port 1883 is assumed. Give a scheme only
+when you need something else: `mqtts://broker.lan:8883`, `wss://broker.lan/mqtt`.
+Credentials embedded in the URL are redacted from the logs.
 
 ### Topics
 
