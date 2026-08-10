@@ -20,13 +20,16 @@ const FALLBACK_POLL_MS = 60_000;
 
 // A zone that has counted down to time <= 1 is the one running: Hydrawise
 // reports `timestr: "Now"` at that point, and `run` becomes seconds remaining
-// rather than the programmed duration.
+// rather than the length of the upcoming run.
 //
-// Deliberately not keyed on `type === 106`. Queued zones share that type, and
-// whether a *scheduled* run reports 106 at all is unverified — every sample so
-// far came from a manual runall. Keying on the countdown instead keeps this
-// working whatever type a scheduled run turns out to use. The observed type is
-// published anyway, so the unknown can be settled from recorded data.
+// Exactly one zone matches at a time, including on a cycle-and-soak program:
+// the soak is filled by the other zones running, so a zone that comes back for
+// a second burst is simply queued again (see samples/status-scheduled.json).
+//
+// Deliberately not keyed on `type === 106`. That turned out to mean "queued or
+// running by a manual runall": a scheduled program reports `type: 9` for its
+// running zone, indistinguishable by type from an idle one (see
+// samples/status-scheduled.json). Keying on the countdown handles both.
 function isRunning(relay) {
     return Number(relay?.time) <= 1;
 }
@@ -66,9 +69,9 @@ function deriveZone(relay) {
         name: relay.name,
         zone: relay.relay,
         running,
-        // `run` means seconds remaining while running, and the programmed or
-        // upcoming duration otherwise — so it is split into two fields rather
-        // than published as one ambiguous number.
+        // `run` means seconds remaining while running, and the length of the
+        // next run otherwise (seasonally adjusted, so it drifts) — so it is
+        // split into two fields rather than published as one ambiguous number.
         seconds_left: running ? Number(relay.run) : null,
         run_seconds: running ? null : Number(relay.run),
         next_run_in: running ? null : Number(relay.time),
