@@ -307,9 +307,19 @@ proxy is killed outright — a dashboard shows unavailable rather than a stale
 `running: false`.
 
 `seconds_left` is a genuine countdown on the active zone, not a boolean, so a
-progress bar is possible. It is populated only while running; the programmed
-duration is `run_seconds` instead. Hydrawise overloads one field for both, and
-splitting them here avoids a whole class of subtle dashboard bug.
+progress bar is possible. It is populated only while running; the duration of a
+zone's next run is `run_seconds` instead. Hydrawise overloads one field for
+both, and splitting them here avoids a whole class of subtle dashboard bug.
+
+On a cycle-and-soak program, `zone` changes several times per cycle and a zone
+can become active more than once, while `running` stays on throughout — the
+controller soaks one zone by running the others. Do not read a change of `zone`,
+or a zone finishing, as the cycle being over.
+
+*Untested guess:* a program with only one zone in it has nothing to fill the
+soak with, so `running` would presumably drop out mid-cycle and come back. Every
+program observed here has been multi-zone, and none has ever paused. Do not
+build an automation around this without checking it on your own controller.
 
 ### Home Assistant
 
@@ -426,31 +436,84 @@ Behaviour confirmed against a real controller, since the v1.6 docs are thin:
 `run` and `time` mean different things depending on what a zone is doing, which
 is the part that catches people out:
 
-| State | `type` | `time` | `timestr` | `run` |
-| --- | --- | --- | --- | --- |
-| Running now | `106` | `1` | `"Now"` | **seconds remaining** |
-| Queued | `106` | seconds until start | clock time | full duration of the upcoming run |
-| Idle | `9` | seconds to next scheduled run | day name | programmed duration |
+| State | `time` | `timestr` | `run` |
+| --- | --- | --- | --- |
+| Running now | `1` | `"Now"` | **seconds remaining** |
+| Queued | seconds until start | clock time | full duration of the upcoming run |
+| Idle | seconds to next scheduled run | day name | duration of the next run |
 
-So `type` alone does not tell you whether a zone is running — queued zones share
-`type: 106`. The running zone is the one that has also reached `time <= 1`:
+**Ignore `type` when deciding whether a zone is running.** It reflects *how* the
+run was triggered, not its state: a manual `runall` reports `106` for both the
+running and the queued zones, while a scheduled program reports `9` throughout —
+the same value an idle zone reports. The running zone is the one that has
+counted down to `time <= 1`:
 
 ```js
-const active = relays.find(r => r.type === 106 && r.time <= 1);
+const active = relays.find(r => r.time <= 1);
 // active ? { zone: active.name, secondsLeft: active.run } : null
 ```
 
-Because zones run strictly back to back, a running zone's `time + run` equals
-the next zone's `time`, and queued zones chain the same way. That is a handy
-way to confirm what a `/start` actually queued — and it is how the table above
-was verified.
+Zones run back to back, so a running zone's `time + run` equals the next zone's
+`time`, and queued zones chain the same way. That is a handy way to confirm what
+a `/start` actually queued — and it is how the table above was verified.
+
+Two things a program can do that the payload gives no direct sign of:
+
+- **Seasonal adjustment** scales run times through the year, so `run` is the
+  duration of that particular run, not a fixed program setting. It drifts over
+  the season.
+- **Cycle-and-soak** splits a zone's watering into shorter bursts so water soaks
+  in rather than running off — used on sloping ground. The controller fills the
+  soak by running the *other* zones in between, so the chain above still holds
+  and something is watering throughout; the cycle simply revisits a zone.
+
+The catch with cycle-and-soak is that each `relay_id` appears exactly **once** in
+`relays[]`, advertising only its next burst — and a *running* zone advertises
+none, since its fields describe the burst in progress. So the list understates
+what is still to come: summing `run` across zones is not the length of the
+cycle, and a zone's `run` is one burst rather than its total for the day.
 
 There is **no `running` array** in the payload, despite some third-party
 integrations assuming one.
 
-Captured payloads are in [`samples/`](samples/), along with the working. Note
-they come from a *manual* `runall`; whether a *scheduled* program also reports
-`type: 106` is unverified.
+Captured payloads are in [`samples/`](samples/), along with the working: a
+manual `runall` polled through a full cycle, and a scheduled program mid-run.
+
+### How cycle-and-soak turns into a run order
+
+The app asks for two numbers per zone — a **maximum run time** and a **soak
+time** — and then says nothing about what the controller does with them. What
+the payloads show:
+
+- **The soak time is a minimum, not a wait.** The controller does not pause for
+  it. It moves to the next zone and comes back once the soak has elapsed, so
+  the real gap is however long the other zones take. In `status-scheduled.json`
+  a zone with a 5-minute soak actually rests 32 minutes, because zones 2, 3 and
+  4 run in between.
+- **Water is on continuously.** Soaking one zone is paid for by watering
+  another, so the cycle has no idle stretches — the queue simply revisits a
+  zone. Nothing in `/status` marks a revisit as different from a first run.
+- **A zone's total is split into bursts no longer than the maximum.** One zone
+  watering 17 minutes with a 10-minute cap ran 9 minutes, then 8 minutes later
+  in the cycle. Note it did *not* run the cap first and the remainder second.
+  The exact split rule is not clear from one cycle.
+
+So a cycle is not "zone 1, 2, 3, 4, done". It is a queue of *bursts*, ordered so
+that no zone is revisited before its soak has passed, and only the next burst
+per zone is visible at any moment.
+
+**Unverified, but implied by the above:** a program watering a single zone has
+no other zone to fill the soak with, so the gap would have to become real dead
+time — no zone at `time <= 1`, and `running` false partway through a cycle that
+has not finished. Nobody here has tested it; every program observed has been
+multi-zone, and none has ever paused. If it holds, it would apply to any program
+with one zone in it, not only to single-zone controllers.
+
+One thing worth checking against your own settings: burst lengths should never
+exceed that zone's maximum, and a zone exceeding it is a sign the setting is per
+zone rather than per program, or that the zone is not soaking at all. In the
+sample, three zones stay at or under the 10-minute cap while `Back Garden` runs
+13 minutes in one go.
 
 ## Troubleshooting
 
